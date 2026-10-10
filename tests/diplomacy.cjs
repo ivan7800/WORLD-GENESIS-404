@@ -1,0 +1,25 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const source=fs.readFileSync(__dirname+'/../app.js','utf8');const nodes=new Map();
+function el(id=''){return {value:id==='seed'?'404113':id==='civCount'?'5':id==='worldName'?'Aetheria':'',textContent:'',style:{},dataset:{},checked:true,children:[],classList:{add(){},remove(){},toggle(){return false}},addEventListener(){},append(){},replaceChildren(){},getBoundingClientRect(){return {width:950,height:600,left:0,top:0}},get clientWidth(){return 950},get clientHeight(){return 600},getContext(){return new Proxy({setTransform(){}},{get(o,k){return o[k]||(()=>{})}})}}}
+const document={getElementById(id){if(!nodes.has(id))nodes.set(id,el(id));return nodes.get(id)},createElement(){return el()},createTextNode(s){return {textContent:s}},querySelectorAll(){return []},addEventListener(){},body:{classList:{toggle(){return false}}}};
+const storage=new Map();const ctx=vm.createContext({document,window:{addEventListener(){}},localStorage:{getItem(k){return storage.get(k)||null},setItem(k,v){storage.set(k,v)}},devicePixelRatio:1,clearInterval(){},setInterval(){return 1},setTimeout(){},URL:{createObjectURL(){return 'blob:mock'},revokeObjectURL(){}},Blob,console,confirm(){return true}});vm.runInContext(source,ctx);const run=x=>vm.runInContext(x,ctx);
+assert.equal(run('state.schemaVersion'),19);
+run("(()=>{const [a,b]=state.civs;a.relations[b.id]=65;b.relations[a.id]=65;signTreaty(a,b,'comercio',16)})()");
+assert.equal(run('state.treaties.length'),1);
+run('diplomacyStep(()=>1)');assert.equal(run('state.tradeRoutes.length'),1);
+run("signTreaty(state.civs[0],state.civs[1],'alianza',24)");
+assert.equal(run('state.treaties.length'),1);
+assert(run('diplomaticDefense(state.civs[0],state.civs[2])')>0);
+const snapshot=run('JSON.stringify(state)');run('restore('+JSON.stringify(snapshot)+')');
+assert.equal(run('state.treaties[0].type'),'alianza');
+run("(()=>{const t=state.treaties[0];t.until=state.year;ensureTreaties()})()");
+assert.equal(run('state.treaties.length'),0);
+const previous=JSON.parse(snapshot);previous.schemaVersion=9;delete previous.treaties;
+run('restore('+JSON.stringify(JSON.stringify(previous))+')');
+assert.equal(run('state.schemaVersion'),19);assert.equal(run('state.treaties.length'),0);
+run("(()=>{const [a,b]=state.civs;state.wars.push({a:a.id,b:b.id,started:state.year,active:true,turns:3,score:30});endWar(state.wars[state.wars.length-1],'Fin de las hostilidades')})()");
+assert.equal(run('state.treaties[0].type'),'tregua');
+assert.equal(run('state.wars.at(-1).active'),false);
+for(let i=0;i<200;i++)run('yearStep()');
+assert(run('state.civs.every(c=>c.cities.reduce((sum,t)=>sum+t.pop,0)===c.population)'));
+console.log('PASS: trade, duplicate prevention, defense, truce, treaty expiry, v9 migration, 200 years');

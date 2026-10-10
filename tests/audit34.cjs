@@ -1,0 +1,15 @@
+'use strict';
+const fs=require('fs'),path=require('path'),assert=require('assert');
+const root=path.resolve(__dirname,'..');
+const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+const js=fs.readFileSync(path.join(root,'app.js'),'utf8');
+const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(x=>x[1]);
+const used=[...js.matchAll(/\$\('([^']+)'\)/g)].map(x=>x[1]);
+assert.strictEqual(new Set(ids).size,ids.length,'duplicate HTML id');
+for(const id of used)assert(ids.includes(id),'missing id: '+id);
+assert(/(?:ALPHA 0\.34|1\.0 RC[1-9])/.test(html),'unexpected header version');
+assert(html.includes('src="app.js"'),'missing main script');
+assert(html.includes('href="styles.css"'),'missing stylesheet');
+assert(js.includes('No se pudo exportar la partida:'),'export failure path missing');
+for(const id of ['godAid','godCalm','godFriend','godHostile','godPeace','godPact','tabTimeline','tabHistory','tabNations','export','import','save','load','zoomIn','zoomOut','resetView'])assert(used.includes(id)||js.includes("['"+id+"',"),'main UI control has no direct selector or delegated binding: '+id);
+console.log('PASS audit34: IDs unique, all JS IDs present, 16 control references, local assets, header and export error path');

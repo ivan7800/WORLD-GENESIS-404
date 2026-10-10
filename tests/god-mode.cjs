@@ -1,0 +1,20 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const source=fs.readFileSync(__dirname+'/../app.js','utf8'),nodes=new Map();
+function node(id=''){return {value:id==='seed'?'404113':id==='civCount'?'5':id==='worldName'?'Aetheria':'',textContent:'',style:{},dataset:{},checked:true,children:[],listeners:{},classList:{add(){},remove(){},toggle(){return false}},addEventListener(k,fn){this.listeners[k]=fn},append(...children){this.children.push(...children)},replaceChildren(...children){this.children=children},getBoundingClientRect(){return {width:950,height:600,left:0,top:0}},get clientWidth(){return 950},get clientHeight(){return 600},getContext(){return new Proxy({setTransform(){}},{get(o,k){return o[k]||(()=>{})},set(o,k,v){o[k]=v;return true}})}}}
+const doc={getElementById(id){if(!nodes.has(id))nodes.set(id,node(id));return nodes.get(id)},createElement(){return node()},createTextNode(s){return {textContent:s}},querySelectorAll(){return []},addEventListener(){},body:{classList:{toggle(){return false}}}};
+const ctx=vm.createContext({document:doc,window:{addEventListener(){}},localStorage:{getItem(){return null},setItem(){}},devicePixelRatio:1,clearInterval(){},setInterval(){return 1},setTimeout(){},URL:{createObjectURL(){return 'blob:mock'},revokeObjectURL(){}},Blob,console,confirm(){return true}});
+vm.runInContext(source,ctx);const run=x=>vm.runInContext(x,ctx);const [a,b]=JSON.parse(run('JSON.stringify(state.civs.slice(0,2).map(c=>c.id))'));
+run(`state.civs.find(c=>c.id===${a}).food=0`);
+assert.strictEqual(run(`intervention('aid',${a},${b})`),true);assert.strictEqual(run(`state.civs.find(c=>c.id===${a}).food`),75);
+run(`state.civs.find(c=>c.id===${a}).unrest=90`);assert(run(`intervention('calm',${a},${b})`));assert.strictEqual(run(`state.civs.find(c=>c.id===${a}).unrest`),65);
+const before=run(`state.civs.find(c=>c.id===${a}).relations[${b}]`);assert(run(`intervention('friend',${a},${b})`));assert(run(`state.civs.find(c=>c.id===${a}).relations[${b}]`)>=before);
+assert.strictEqual(run(`intervention('friend',${a},${a})`),false);
+assert.strictEqual(run(`intervention('peace',${a},${b})`),false);
+assert(run(`intervention('trade',${a},${b})`));assert.strictEqual(run(`state.treaties.some(t=>t.type==='comercio'&&t.a===Math.min(${a},${b})&&t.b===Math.max(${a},${b}))`),true);
+run(`state.wars.push({a:${a},b:${b},started:state.year,active:true,turns:0,score:0})`);
+assert.strictEqual(run(`intervention('trade',${a},${b})`),false);
+assert(run(`intervention('peace',${a},${b})`));assert.strictEqual(run(`activeWar(state.civs[0],state.civs[1])===undefined`),true);
+assert(run(`state.treaties.some(t=>t.type==='tregua'&&t.a===Math.min(${a},${b}))`));
+const snapshot=run('JSON.stringify(state)');run('restore('+JSON.stringify(snapshot)+')');assert(run(`state.treaties.some(t=>t.type==='tregua'&&t.a===Math.min(${a},${b}))`));
+for(const id of ['godAid','godCalm','godFriend','godHostile','godPeace','godPact'])assert.strictEqual(typeof nodes.get(id).listeners.click,'function',id);
+console.log('PASS: aid, calm, diplomacy, invalid targets, peace, treaty, save restoration, six UI listeners');

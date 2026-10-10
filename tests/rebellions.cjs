@@ -1,0 +1,24 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const source=fs.readFileSync(__dirname+'/../app.js','utf8');
+const nodes=new Map();
+function node(id=''){return {value:id==='seed'?'404113':id==='civCount'?'5':id==='worldName'?'Aetheria':'',textContent:'',style:{},dataset:{},checked:true,children:[],classList:{add(){},remove(){},toggle(){return false}},addEventListener(){},append(){},replaceChildren(){},getBoundingClientRect(){return {width:950,height:600,left:0,top:0}},get clientWidth(){return 950},get clientHeight(){return 600},getContext(){return new Proxy({setTransform(){}},{get(o,k){return o[k]||(()=>{})}})}}}
+const document={getElementById(id){if(!nodes.has(id))nodes.set(id,node(id));return nodes.get(id)},createElement(){return node()},createTextNode(s){return {textContent:s}},querySelectorAll(){return []},addEventListener(){},body:{classList:{toggle(){return false}}}};
+const storage=new Map(),ctx=vm.createContext({document,window:{addEventListener(){}},localStorage:{getItem(k){return storage.get(k)||null},setItem(k,v){storage.set(k,v)}},devicePixelRatio:1,clearInterval(){},setInterval(){return 1},setTimeout(){},URL:{createObjectURL(){return 'blob:mock'},revokeObjectURL(){}},Blob,console,confirm(){return true}});
+vm.runInContext(source,ctx);const run=x=>vm.runInContext(x,ctx);
+const old=JSON.parse(run('JSON.stringify(state)'));old.schemaVersion=6;
+run('restore('+JSON.stringify(JSON.stringify(old))+')');
+assert.equal(run('state.schemaVersion'),19);
+assert(run('state.civs.every(c=>Number.isFinite(c.unrest))'));
+run(`(()=>{let c=state.civs[0];c.cities.push({name:'Provincia Rebelde',x:c.x+7,y:c.y,founded:3,buildings:{homes:2,farms:2,workshops:0,markets:0},pop:0,prosperity:10});c.population=400;c.food=0;c.production=-100;c.unrest=99;c.crisisYears=9;state.year=10;distributePopulation(c);internalCrisisStep(()=>0)})()`);
+assert.equal(run('state.civs.length'),old.civs.length+1);
+assert(run('state.civs.every(c=>c.cities.reduce((s,x)=>s+x.pop,0)===c.population)'));
+assert.equal(run('new Set(state.civs.map(c=>c.id)).size'),old.civs.length+1);
+assert(run('state.civs.some(c=>c.name.includes("Libre"))'));
+assert(run('state.events.some(e=>e.title==="Independencia")'));
+const current=run('JSON.stringify(state)');run('restore('+JSON.stringify(current)+')');
+assert.equal(run('state.civs.length'),old.civs.length+1);
+assert.equal(run('state.civs.filter(c=>c.alive).length'),old.civs.length+1);
+for(let i=0;i<300;i++)run('yearStep()');
+assert(run('state.civs.every(c=>c.cities.reduce((s,x)=>s+x.pop,0)===c.population)'));
+assert(run('state.civs.length<=20'));
+console.log('PASS: v6 save migration; forced secession; unique IDs; relationships; restore; 300-year consistency');

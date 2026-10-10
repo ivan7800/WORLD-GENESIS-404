@@ -1,0 +1,24 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const source=fs.readFileSync(__dirname+'/../app.js','utf8');const nodes=new Map();
+function el(id=''){return {value:id==='seed'?'404113':id==='civCount'?'5':id==='worldName'?'Aetheria':'',textContent:'',style:{},dataset:{},checked:true,children:[],classList:{add(){},remove(){},toggle(){return false}},addEventListener(){},append(){},replaceChildren(){},getBoundingClientRect(){return {width:950,height:600,left:0,top:0}},get clientWidth(){return 950},get clientHeight(){return 600},getContext(){return new Proxy({setTransform(){}},{get(o,k){return o[k]||(()=>{})}})}}}
+const document={getElementById(id){if(!nodes.has(id))nodes.set(id,el(id));return nodes.get(id)},createElement(){return el()},createTextNode(s){return {textContent:s}},querySelectorAll(){return []},addEventListener(){},body:{classList:{toggle(){return false}}}};
+const storage=new Map();const ctx=vm.createContext({document,window:{addEventListener(){}},localStorage:{getItem(k){return storage.get(k)||null},setItem(k,v){storage.set(k,v)}},devicePixelRatio:1,clearInterval(){},setInterval(){return 1},setTimeout(){},URL:{createObjectURL(){return 'blob:mock'},revokeObjectURL(){}},Blob,console,confirm(){return true}});vm.runInContext(source,ctx);const run=x=>vm.runInContext(x,ctx);
+assert.equal(run('state.schemaVersion'),19);
+run(`(()=>{const [a,b]=state.civs;a.food=800;b.food=0;a.wood=200;b.wood=0;a.stone=100;b.stone=0;a.wealth=10;b.wealth=1000;a.relations[b.id]=65;b.relations[a.id]=65;signTreaty(a,b,'comercio',20)})()`);
+const before=run('JSON.stringify(state.civs.slice(0,2).map(c=>({food:c.food,wood:c.wood,stone:c.stone,wealth:c.wealth})))');
+run('tradeStep()');
+const data=JSON.parse(run('JSON.stringify({before:JSON.parse('+JSON.stringify(before)+'),after:state.civs.slice(0,2).map(c=>({food:c.food,wood:c.wood,stone:c.stone,wealth:c.wealth})),routes:state.tradeRoutes})'));
+assert.equal(data.routes.length,1);
+assert.equal(data.routes[0].status,'active');
+for(const key of ['food','wood','stone','wealth'])assert.equal(data.before.reduce((a,c)=>a+c[key],0),data.after.reduce((a,c)=>a+c[key],0),key+' must be conserved');
+assert(data.after[1].food>data.before[1].food,'food must physically transfer');
+run('state.wars.push({a:state.civs[0].id,b:state.civs[2].id,started:state.year,active:true,turns:0,score:0});tradeStep()');
+assert.equal(run('state.tradeRoutes[0].status'),'blocked');
+const snap=run('JSON.stringify(state)');run('restore('+JSON.stringify(snap)+')');
+assert.equal(run('state.tradeRoutes[0].status'),'blocked');
+run('state.wars=[];tradeStep()');assert.equal(run('state.tradeRoutes[0].status'),'active');
+const legacy=JSON.parse(snap);legacy.schemaVersion=10;delete legacy.tradeRoutes;
+run('restore('+JSON.stringify(JSON.stringify(legacy))+')');assert.equal(run('state.schemaVersion'),19);assert.equal(run('state.tradeRoutes.length'),0);
+for(let i=0;i<300;i++)run('yearStep()');
+assert(run('state.civs.every(c=>c.food>=0&&c.wood>=0&&c.stone>=0&&c.wealth>=0)'));
+console.log('PASS: real resource transfers, conservation, war disruption, recovery, v10 migration, 300 years');

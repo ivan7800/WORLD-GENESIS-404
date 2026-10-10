@@ -1,0 +1,20 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs'),vm=require('node:vm');
+const src=fs.readFileSync(__dirname+'/../app.js','utf8');
+const nodes=new Map(),operations=[];
+function el(id=''){return {value:id==='seed'?'404113':id==='civCount'?'5':id==='worldName'?'Aetheria':'',textContent:'',checked:true,style:{},dataset:{},children:[],classList:{add(){},remove(){},toggle(){return false}},append(){},replaceChildren(){},addEventListener(type,fn){this['on_'+type]=fn},getBoundingClientRect(){return {width:950,height:600,left:0,top:0}},get clientWidth(){return 950},get clientHeight(){return 600},getContext(){return new Proxy({setTransform(){}},{get(o,k){return o[k]||((...args)=>{operations.push([k,...args])})}})}}}
+const document={getElementById(id){if(!nodes.has(id))nodes.set(id,el(id));return nodes.get(id)},createElement(){return el()},createTextNode(s){return {textContent:s}},querySelectorAll(){return []},addEventListener(){},body:{classList:{toggle(){return false}}}};
+const context=vm.createContext({document,window:{addEventListener(){}},localStorage:{getItem(){return null},setItem(){}},devicePixelRatio:1,clearInterval(){},setInterval(){return 1},setTimeout(){},Blob,URL:{createObjectURL(){return 'blob:mock'},revokeObjectURL(){}},console,confirm(){return true}});
+vm.runInContext(src,context);const run=s=>vm.runInContext(s,context);
+run(`(()=>{const [a,b]=state.civs;a.relations[b.id]=70;b.relations[a.id]=70;signTreaty(a,b,'comercio',30);tradeStep()})()`);
+assert.equal(run('state.tradeRoutes.length'),1);
+operations.length=0;run('draw()');
+assert(operations.some(x=>x[0]==='setLineDash'&&x[1][0]===7),'active trade link must be rendered');
+assert(nodes.get('layerRoutes').on_change,'routes layer must have a change listener');
+operations.length=0;nodes.get('layerRoutes').on_change({target:{checked:false}});
+assert(!operations.some(x=>x[0]==='setLineDash'&&x[1][0]===7),'hidden layer must not render route');
+operations.length=0;nodes.get('layerRoutes').on_change({target:{checked:true}});
+assert(operations.some(x=>x[0]==='setLineDash'&&x[1][0]===7),'layer can be enabled again');
+run('state.tradeRoutes[0].status="blocked"');operations.length=0;run('draw()');
+assert(operations.some(x=>x[0]==='setLineDash'&&x[1][0]===3),'blocked route must have distinct dash pattern');
+console.log('PASS: trade route drawing, toggle on/off and interrupted route styling');
